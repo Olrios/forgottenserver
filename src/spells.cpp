@@ -500,6 +500,14 @@ bool Spell::configureSpell(const pugi::xml_node& node)
 		manaPercent = pugi::cast<uint32_t>(attr.value());
 	}
 
+	if ((attr = node.attribute("health"))) {
+		health = pugi::cast<uint32_t>(attr.value());
+	}
+
+	if ((attr = node.attribute("healthpercent"))) {
+		healthPercent = pugi::cast<uint32_t>(attr.value());
+	}
+
 	if ((attr = node.attribute("soul"))) {
 		soul = pugi::cast<uint32_t>(attr.value());
 	}
@@ -632,6 +640,12 @@ bool Spell::playerSpellCheck(Player* player) const
 	}
 
 	if (player->getMana() < getManaCost(player) && !player->hasFlag(PlayerFlag_HasInfiniteMana)) {
+		player->sendCancelMessage(RETURNVALUE_NOTENOUGHMANA);
+		g_game.addMagicEffect(player->getPosition(), CONST_ME_POFF);
+		return false;
+	}
+
+	if (player->getHealth() < static_cast<int32_t>(getHealthCost(player)) && !player->hasFlag(PlayerFlag_HasInfiniteMana)) {
 		player->sendCancelMessage(RETURNVALUE_NOTENOUGHMANA);
 		g_game.addMagicEffect(player->getPosition(), CONST_ME_POFF);
 		return false;
@@ -819,15 +833,20 @@ void Spell::postCastSpell(Player* player, bool finishedCast /*= true*/, bool pay
 	}
 
 	if (payCost) {
-		Spell::postCastSpell(player, getManaCost(player), getSoulCost());
+		Spell::postCastSpell(player, getManaCost(player), getHealthCost(player), getSoulCost());
 	}
 }
 
-void Spell::postCastSpell(Player* player, uint32_t manaCost, uint32_t soulCost)
+void Spell::postCastSpell(Player* player, uint32_t manaCost, uint32_t healthCost, uint32_t soulCost)
 {
 	if (manaCost > 0) {
 		player->addManaSpent(manaCost);
 		player->changeMana(-static_cast<int32_t>(manaCost));
+	}
+
+	if (healthCost > 0) {
+		player->addManaSpent(healthCost);
+		player->changeHealth(-static_cast<int32_t>(healthCost));
 	}
 
 	if (!player->hasFlag(PlayerFlag_HasInfiniteSoul)) {
@@ -839,18 +858,30 @@ void Spell::postCastSpell(Player* player, uint32_t manaCost, uint32_t soulCost)
 
 uint32_t Spell::getManaCost(const Player* player) const
 {
-	uint32_t finalMana = 0;
+	uint32_t manaCost = 0;
 	if (mana != 0) {
-		finalMana = mana;
+		manaCost = mana;
 	}
 
 	if (manaPercent != 0) {
 		uint32_t maxMana = player->getMaxMana();
-		uint32_t manaCost = (maxMana * manaPercent) / 100;
-		finalMana = finalMana + manaCost;
+		manaCost += ((maxMana * manaPercent) / 100);
+	}
+	return manaCost;
+}
+
+uint32_t Spell::getHealthCost(const Player* player) const
+{
+	uint32_t healthCost = 0;
+	if (health != 0) {
+		healthCost = health;
 	}
 
-	return finalMana;
+	if (healthPercent != 0) {
+		uint32_t maxHealth = player->getMaxHealth();
+		healthCost += ((maxHealth * healthPercent) / 100);
+	}
+	return healthCost;
 }
 
 std::string InstantSpell::getScriptEventName() const

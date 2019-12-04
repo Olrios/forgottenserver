@@ -888,6 +888,7 @@ bool InstantSpell::configureEvent(const pugi::xml_node& node)
 	if ((attr = node.attribute("blockwalls"))) {
 		checkLineOfSight = attr.as_bool();
 	}
+
 	return true;
 }
 
